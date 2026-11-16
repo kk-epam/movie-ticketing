@@ -37,6 +37,7 @@ public class BookingService {
      * Books the requested seats atomically. Seats are locked with
      * SELECT ... FOR UPDATE, so a concurrent request for the same seat waits
      * and then fails cleanly with 409 instead of double-booking.
+     *
      */
     @Transactional
     public BookingDto createBooking(BookingRequest request) {
