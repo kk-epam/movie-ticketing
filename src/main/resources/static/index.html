@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CineBook - Movie Tickets</title>
+<style>
+  :root {
+    --bg: #0f1115; --card: #181b22; --text: #e8eaf0; --muted: #8b93a7;
+    --accent: #e50914; --free: #2d3240; --sel: #22c55e; --booked: #4b1f24;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); }
+  header {
+    padding: 16px 24px; background: #000; display: flex; align-items: center; gap: 16px;
+    flex-wrap: wrap; position: sticky; top: 0; z-index: 5;
+  }
+  header h1 { margin: 0; font-size: 1.4rem; color: var(--accent); cursor: pointer; }
+  #search {
+    flex: 1; min-width: 200px; max-width: 420px; padding: 10px 14px; border-radius: 8px;
+    border: 1px solid #333; background: #111; color: var(--text); font: inherit;
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px; }
+  h2 { margin: 16px 0 8px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
+  .card { background: var(--card); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 8px; }
+  .card h3 { margin: 0; }
+  .meta { color: var(--muted); font-size: 0.9rem; margin: 0; }
+  .btn {
+    background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 10px 14px;
+    cursor: pointer; font: inherit; align-self: flex-start;
+  }
+  .btn.ghost { background: transparent; border: 1px solid #333; color: var(--text); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .shows { display: flex; flex-wrap: wrap; gap: 10px; }
+  .show-btn {
+    background: var(--card); border: 1px solid #333; color: var(--text); border-radius: 10px;
+    padding: 12px 14px; cursor: pointer; text-align: left; font: inherit; min-width: 160px;
+  }
+  .show-btn:hover { border-color: var(--accent); }
+  .panel { background: var(--card); border-radius: 12px; padding: 20px; margin-top: 16px; }
+  .screen {
+    margin: 24px auto 4px; width: 70%; height: 8px; border-radius: 50%;
+    background: linear-gradient(#bbb, #444);
+  }
+  .seat-map { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 16px 0; }
+  .row { display: flex; gap: 6px; align-items: center; }
+  .row-label { width: 20px; color: var(--muted); text-align: center; }
+  .seat {
+    width: 32px; height: 30px; border-radius: 6px 6px 3px 3px; border: 0;
+    background: var(--free); color: #cfd3dd; font-size: 0.7rem; cursor: pointer; font: inherit; font-size: 0.7rem;
+  }
+  .seat.booked { background: var(--booked); color: #777; cursor: not-allowed; }
+  .seat.selected { background: var(--sel); color: #052e16; }
+  .legend { display: flex; gap: 18px; justify-content: center; color: var(--muted); font-size: 0.85rem; flex-wrap: wrap; }
+  .legend span::before {
+    content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px;
+    margin-right: 6px; vertical-align: middle; background: var(--c);
+  }
+  label { display: block; font-size: 0.85rem; color: var(--muted); margin: 12px 0 4px; }
+  .field {
+    width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #333;
+    background: #111; color: var(--text); font: inherit;
+  }
+  .error { color: #f87171; margin: 10px 0 0; }
+  .success { border: 1px solid var(--sel); }
+  .hidden { display: none !important; }
+  .toolbar { margin-bottom: 12px; }
+  @media (max-width: 600px) { .seat { width: 26px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="home">CineBook</h1>
+  <input id="search" type="search" placeholder="Search movies by title..." autocomplete="off">
+</header>
+
+<main>
+  <!-- 1. Browse / search movies -->
+  <section id="browse">
+    <div id="movies" class="grid"></div>
+    <p id="empty" class="meta hidden">No movies match your search.</p>
+  </section>
+
+  <!-- 2. Pick a showtime -->
+  <section id="movie-view" class="hidden">
+    <div class="toolbar"><button class="btn ghost" id="to-browse">← All movies</button></div>
+    <div id="movie-info" class="panel"></div>
+    <h2>Showtimes</h2>
+    <div id="shows" class="shows"></div>
+  </section>
+
+  <!-- 3. Select seats and book -->
+  <section id="seat-view" class="hidden">
+    <div class="toolbar"><button class="btn ghost" id="to-shows">← Showtimes</button></div>
+    <div id="show-info" class="panel"></div>
+    <div class="screen"></div>
+    <p class="meta" style="text-align:center">SCREEN</p>
+    <div class="legend">
+      <span style="--c: var(--free)">Available</span>
+      <span style="--c: var(--sel)">Selected</span>
+      <span style="--c: var(--booked)">Booked</span>
+    </div>
+    <div id="seat-map" class="seat-map"></div>
+
+    <div class="panel">
+      <form id="booking-form">
+        <p id="summary" class="meta">Select one or more seats.</p>
+        <label for="name">Full name</label>
+        <input class="field" id="name" required maxlength="100">
+        <label for="email">Email</label>
+        <input class="field" id="email" type="email" required maxlength="150">
+        <p id="form-error" class="error hidden"></p>
+        <button class="btn" id="confirm" type="submit" disabled style="margin-top: 16px;">Confirm booking</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- 4. Confirmation -->
+  <section id="confirm-view" class="hidden">
+    <div id="confirmation" class="panel success"></div>
+    <div class="toolbar" style="margin-top: 16px;"><button class="btn" id="to-browse-2">Browse more movies</button></div>
+  </section>
+</main>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const money = n => "$" + Number(n).toFixed(2);
+  const fmtTime = d => new Date(d).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const fmtDate = d => new Date(d).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+
+  const state = { movie: null, show: null, seats: [], selected: new Set() };
+
+  function el(tag, props = {}, text) {
+    const node = document.createElement(tag);
+    Object.assign(node, props);
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function showView(id) {
+    ["browse", "movie-view", "seat-view", "confirm-view"].forEach(v => $(v).classList.toggle("hidden", v !== id));
+    window.scrollTo(0, 0);
+  }
+
+  async function api(path, options = {}) {
+    const res = await fetch(path, {
+      headers: { "Content-Type": "application/json" },
+      ...options
+    });
+    const isJson = res.headers.get("content-type")?.includes("application/json");
+    const body = isJson ? await res.json() : null;
+    if (!res.ok) throw new Error(body?.message || body?.detail || `Request failed (${res.status})`);
+    return body;
+  }
+
+  // ---- Browse & search ----
+  let searchTimer;
+  $("search").addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(loadMovies, 250);
+  });
+
+  async function loadMovies() {
+    const q = $("search").value.trim();
+    const movies = await api(`/api/movies${q ? "?title=" + encodeURIComponent(q) : ""}`);
+    $("movies").replaceChildren(...movies.map(m => {
+      const card = el("div", { className: "card" });
+      const btn = el("button", { className: "btn" }, "View showtimes");
+      btn.onclick = () => openMovie(m);
+      card.append(
+        el("h3", {}, m.title),
+        el("p", { className: "meta" }, `${m.genre} · ${m.durationMinutes} min · ${m.rating}`),
+        el("p", { className: "meta" }, m.description),
+        btn
+      );
+      return card;
+    }));
+    $("empty").classList.toggle("hidden", movies.length > 0);
+  }
+
+  // ---- Showtimes ----
+  async function openMovie(m) {
+    state.movie = m;
+    $("movie-info").replaceChildren(
+      el("h2", {}, m.title),
+      el("p", { className: "meta" }, `${m.genre} · ${m.durationMinutes} min · ${m.rating}`),
+      el("p", {}, m.description)
+    );
+    $("shows").replaceChildren(el("p", { className: "meta" }, "Loading showtimes..."));
+    showView("movie-view");
+
+    const shows = await api(`/api/movies/${m.id}/shows`);
+    if (shows.length === 0) {
+      $("shows").replaceChildren(el("p", { className: "meta" }, "No upcoming showtimes."));
+      return;
+    }
+    $("shows").replaceChildren(...shows.map(s => {
+      const b = el("button", { className: "show-btn" });
+      b.append(
+        el("strong", {}, `${fmtDate(s.startTime)} · ${fmtTime(s.startTime)}`),
+        el("div", { className: "meta" }, s.screenName),
+        el("div", { className: "meta" }, `${money(s.price)} per seat`)
+      );
+      b.onclick = () => openSeats(s);
+      return b;
+    }));
+  }
+
+  // ---- Seat selection ----
+  async function openSeats(show) {
+    state.show = show;
+    state.selected = new Set();
+    $("show-info").replaceChildren(
+      el("h2", {}, state.movie.title),
+      el("p", { className: "meta" }, `${fmtDate(show.startTime)} at ${fmtTime(show.startTime)} · ${show.screenName} · ${money(show.price)} per seat`)
+    );
+    $("booking-form").reset();
+    $("form-error").classList.add("hidden");
+    showView("seat-view");
+    await loadSeats();
+  }
+
+  async function loadSeats() {
+    state.seats = await api(`/api/shows/${state.show.id}/seats`);
+    // Drop any previously selected seat that has since been taken by someone else
+    state.selected = new Set([...state.selected].filter(label =>
+      state.seats.some(s => s.label === label && !s.booked)));
+    renderSeats();
+    updateSummary();
+  }
+
+  function renderSeats() {
+    const rows = {};
+    state.seats.forEach(s => (rows[s.label[0]] ??= []).push(s));
+
+    $("seat-map").replaceChildren(...Object.keys(rows).sort().map(r => {
+      const rowEl = el("div", { className: "row" });
+      rowEl.append(el("span", { className: "row-label" }, r));
+      rows[r].forEach(s => {
+        const b = el("button", { className: "seat", type: "button" }, s.label.slice(1));
+        b.title = s.label;
+        if (s.booked) {
+          b.classList.add("booked");
+          b.disabled = true;
+        } else {
+          if (state.selected.has(s.label)) b.classList.add("selected");
+          b.onclick = () => toggleSeat(s.label);
+        }
+        rowEl.append(b);
+      });
+      return rowEl;
+    }));
+  }
+
+  const MAX_SEATS = 10;
+  function toggleSeat(label) {
+    if (state.selected.has(label)) {
+      state.selected.delete(label);
+    } else {
+      if (state.selected.size >= MAX_SEATS) {
+        alert(`You can book up to ${MAX_SEATS} seats at a time.`);
+        return;
+      }
+      state.selected.add(label);
+    }
+    renderSeats();
+    updateSummary();
+  }
+
+  function sortedSelection() {
+    return [...state.selected].sort((a, b) =>
+      a[0].localeCompare(b[0]) || Number(a.slice(1)) - Number(b.slice(1)));
+  }
+
+  function updateSummary() {
+    const n = state.selected.size;
+    $("summary").textContent = n
+      ? `${n} seat(s): ${sortedSelection().join(", ")} · Total ${money(n * state.show.price)}`
+      : "Select one or more seats.";
+    $("confirm").disabled = n === 0;
+  }
+
+  // ---- Booking ----
+  $("booking-form").addEventListener("submit", async e => {
+    e.preventDefault();
+    $("form-error").classList.add("hidden");
+    $("confirm").disabled = true;
+    try {
+      const booking = await api("/api/bookings", {
+        method: "POST",
+        body: JSON.stringify({
+          showId: state.show.id,
+          customerName: $("name").value.trim(),
+          customerEmail: $("email").value.trim(),
+          seatLabels: sortedSelection()
+        })
+      });
+      showConfirmation(booking);
+    } catch (err) {
+      $("form-error").textContent = err.message;
+      $("form-error").classList.remove("hidden");
+      await loadSeats();   // refresh availability so the user sees what changed
+    } finally {
+      updateSummary();
+    }
+  });
+
+  function showConfirmation(b) {
+    $("confirmation").replaceChildren(
+      el("h2", {}, "Booking confirmed"),
+      el("p", {}, `Booking code: ${b.bookingCode}`),
+      el("p", {}, `${b.movieTitle} · ${b.screenName}`),
+      el("p", {}, `${fmtDate(b.startTime)} at ${fmtTime(b.startTime)}`),
+      el("p", {}, `Seats: ${b.seatLabels.join(", ")}`),
+      el("p", {}, `Total: ${money(b.totalAmount)}`),
+      el("p", { className: "meta" }, `Booked for ${b.customerName}. Keep your booking code for reference.`)
+    );
+    showView("confirm-view");
+  }
+
+  // ---- Navigation ----
+  $("home").onclick = () => showView("browse");
+  $("to-browse").onclick = () => showView("browse");
+  $("to-browse-2").onclick = () => showView("browse");
+  $("to-shows").onclick = () => showView("movie-view");
+
+  loadMovies();
+</script>
+</body>
+</html>
