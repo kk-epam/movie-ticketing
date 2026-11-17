@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "teams": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@floriscornel/teams-mcp@latest"],
+      "env": {
+        "TEAMS_MCP_READ_ONLY": "true"
+      }
+    },
+    "javadoc": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "javadoc-mcp"]
+    }
+  }
+}
